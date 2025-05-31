@@ -25,8 +25,13 @@ except ImportError:
 
 app = FastAPI()
 
+# Add a root route for health checks
+@app.get("/")
+async def root():
+    return {"status": "healthy"}
+
 # Download the PPO model at startup
-MODEL_URL = "https://github.com/777Hans/DynamicPricingEngine/releases/download/v1.0/ppo_model.zip"
+MODEL_URL = "https://github.com/777Hans/Dynamic-Pricing-Engine/releases/download/v1.0/ppo_model.zip"
 MODEL_PATH = "models/ppo_model.zip"
 
 if not os.path.exists(MODEL_PATH):
@@ -53,7 +58,8 @@ async def get_price(endpoint: str = "/weather"):
     try:
         # Update metrics
         request_counts[endpoint] = request_counts.get(endpoint, 0) + 1
-        sentiment_scores[endpoint] = sentiment_scores.get(endpoint, 0.0)
+        # Sentiment score is now updated by the log producer, use the current value
+        current_sentiment = sentiment_scores.get(endpoint, 0.0)
         competitor_prices[endpoint] = competitor_prices.get(endpoint, 0.5)
 
         # Use the PPO model for prediction
@@ -62,7 +68,7 @@ async def get_price(endpoint: str = "/weather"):
         else:
             obs = np.array([
                 request_counts[endpoint],
-                sentiment_scores[endpoint],
+                current_sentiment,
                 competitor_prices[endpoint]
             ], dtype=np.float32)
             action, _ = model.predict(obs)
@@ -74,7 +80,7 @@ async def get_price(endpoint: str = "/weather"):
             "endpoint": endpoint,
             "price": price,
             "demand": request_counts[endpoint],
-            "sentiment": sentiment_scores[endpoint]
+            "sentiment": current_sentiment
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
