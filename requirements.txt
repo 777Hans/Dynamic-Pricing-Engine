@@ -5,4 +5,4 @@ numpy==1.23.5
 mangum==0.17.0
 torch==2.2.0+cpu
 stable-baselines3==2.3.2
-gymnasium==0.29.1 --no-optional
+gymnasium==0.29.1 
