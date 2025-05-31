@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
+from datetime import datetime
 import numpy as np
 import os
 import requests
@@ -12,14 +13,14 @@ try:
     from scripts.pricing_engine import (
         prices, request_counts,
         sentiment_scores, competitor_prices,
-        get_dashboard_html
+        historical_data, get_dashboard_html, save_data
     )
     from scripts.api_log_producer import produce_logs
 except ImportError:
     from pricing_engine import (
         prices, request_counts,
         sentiment_scores, competitor_prices,
-        get_dashboard_html
+        historical_data, get_dashboard_html, save_data
     )
     from api_log_producer import produce_logs
 
@@ -48,8 +49,8 @@ except Exception as e:
 
 @app.on_event("startup")
 async def startup_event():
-    # Start the log producer thread
-    producer_thread = threading.Thread(target=produce_logs)
+    # Start the log producer thread with the PPO model
+    producer_thread = threading.Thread(target=produce_logs, args=(model,))
     producer_thread.daemon = True
     producer_thread.start()
 
@@ -58,7 +59,6 @@ async def get_price(endpoint: str = "/weather"):
     try:
         # Update metrics
         request_counts[endpoint] = request_counts.get(endpoint, 0) + 1
-        # Sentiment score is now updated by the log producer, use the current value
         current_sentiment = sentiment_scores.get(endpoint, 0.0)
         competitor_prices[endpoint] = competitor_prices.get(endpoint, 0.5)
 
@@ -73,8 +73,24 @@ async def get_price(endpoint: str = "/weather"):
             ], dtype=np.float32)
             action, _ = model.predict(obs)
             price = action[0] * 0.1 + 0.1  # Scale action to price
+            price = round(price, 2)  # Round to 2 decimal places
 
         prices[endpoint] = price
+
+        # Store in historical data
+        if endpoint not in historical_data:
+            historical_data[endpoint] = []
+        historical_data[endpoint].append({
+            "timestamp": datetime.utcnow().isoformat(),
+            "price": price,
+            "demand": request_counts[endpoint],
+            "sentiment": current_sentiment,
+            "competitor_price": competitor_prices[endpoint],
+            "user_feedback": "Manual request"
+        })
+
+        # Save updated data
+        save_data(prices, request_counts, sentiment_scores, competitor_prices, historical_data)
 
         return {
             "endpoint": endpoint,
