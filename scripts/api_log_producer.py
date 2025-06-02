@@ -110,4 +110,4 @@ def produce_logs(model):
 
             save_data(prices, request_counts, sentiment_scores, competitor_prices, historical_data)
 
-        time.sleep(5)
+        time.sleep(10)  # Increased to 10 seconds
